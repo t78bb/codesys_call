@@ -2784,6 +2784,7 @@ def compile_pou(application, pou_objs, pou_mapping):
     print("Starting compile process...")
     application.clean()
     compile_msgs = []
+    precompile_msgs = []
 
     def extract_line_number(text):
         match = re.search(r'(?:Line|行)[\\s:]*(\\d+)', text)
@@ -2791,6 +2792,47 @@ def compile_pou(application, pou_objs, pou_mapping):
             return int(match.group(1))
         else:
             return -1
+
+    # Precompile step - get precompile messages before build
+    try:
+        print("Starting precompile...")
+        # Note: In CODESYS, precompile is usually part of build process
+        # We'll capture messages before build to simulate precompile info
+        precompile_start_time = time.time()
+
+        cates_pre = system.get_message_categories(bActive=False)
+
+        for cate in cates_pre:
+            if cate is None:
+                continue
+            desc = system.get_message_category_description(cate)
+            precompile_desc_diff_lang = set(["Precompile", "预编译"])  # precompile related messages
+            levels = set([scriptengine.Severity.FatalError, scriptengine.Severity.Error])
+            obj_names = set([obj.get_name() for obj in pou_objs])
+            if desc in precompile_desc_diff_lang:
+                print("Found precompile message category, msgs:")
+                msg_objs = system.get_message_objects(category=cate)
+                for obj in msg_objs:
+                    print("Precompile Obj pos: {{}}, desc: {{}}, ser: {{}}".format(obj.position_text, obj.text, obj.severity))
+                precompile_msgs = [
+                    {{
+                        "Path": extract_line_number(obj.position_text) if obj.position_text else -1,
+                        "ErrorDesc": obj.text,
+                        "IsDef": True if obj.position_text and "Decl" in obj.position_text else False,
+                        "PouName": obj.object.get_name() if obj.object else "",
+                        "ID": obj.prefix + "{{:0>4d}}".format(int(obj.number))
+                    }}
+                    for obj in msg_objs if obj.severity in levels and \\
+                        obj.object and obj.object.get_name() in obj_names
+                ]
+                print(precompile_msgs)
+
+        precompile_time = time.time() - precompile_start_time
+        print("Precompile operation completed")
+
+    except Exception, precompile_error:
+        print("Error during precompile operation: " + str(precompile_error))
+        print(traceback.format_exc())
 
     try:
         print("Compiling application...")
@@ -2833,7 +2875,8 @@ def compile_pou(application, pou_objs, pou_mapping):
                 "type": pou_mapping[pou.get_name()]
             }} for pou in pou_objs],
             "time": compilation_time,
-            "Errors": compile_msgs
+            "Errors": compile_msgs,
+            "PrecompileErrors": precompile_msgs
         }}
     except Exception, precompile_error:
         print("Error during precompile operation: " + str(precompile_error))
