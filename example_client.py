@@ -293,7 +293,7 @@ def initialize():
     logger.info("Creating new project at %s...", project_path)
     
     copy_project(project_dir)
-
+    
     # Try to create project with retries in case of temporary issues
     max_project_attempts = 1
     for attempt in range(1, max_project_attempts + 1):
@@ -333,7 +333,7 @@ def initialize():
         logger.error("Failed to create project after multiple attempts")
         return False
 
-    
+
 
 def example_workflow():
     """Run an example workflow demonstrating key API capabilities."""

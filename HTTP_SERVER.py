@@ -2042,7 +2042,7 @@ def create_new_pou(project, pou_info):
     application = project.active_application
     print("Got active application")
 
-    container = application
+    cont ainer = application
     print("Using application object directly for POU creation")
     
     # Use the properly defined POU types and implementation languages
@@ -2760,19 +2760,34 @@ def get_and_replace_pou(project, pou_info):
         pou_name = pou_info.get('pou_name')
 
         application = project.active_application
-        pous = application.find(pou_name)
+        if application is None:
+            print("get Application failed")
+            result = {{"success": False, "error": "Project has no active application"}}
+            return None, result
+        pous = application.find(pou_name, True)
 
         # pous = projects.find(pou_name, True)
+        print("start replace pous")
         for pou in pous:
-            pou.textual_declaration.replace(pou_info.get('code_decl'))
-            pou.textual_implementation.replace(pou_info.get('code_impl'))
+            print("enter for pou in pous")
+            # Ensure code strings are not None to avoid "Value cannot be null" error
+            code_decl = pou_info.get('code_decl') or "jk"
+            code_impl = pou_info.get('code_impl') or "jk"
+            pou.textual_declaration.replace(code_decl)
+            pou.textual_implementation.replace(code_impl)
             res = {{
                 "success": True,
                 "pou": {{
                     "name": pou_name
                 }}
             }}
+            print("replace pous success")
             return pou, res
+        
+        # If no POU was found in the loop
+        print("nothing matched - POU not found: " + pou_name)
+        result = {{"success": False, "error": "POU not found: " + pou_name}}
+        return None, result
     except Exception, e:
         print("Error getting and replacing POU: " + str(e))
         result = {{"success": False, "error": "Error getting and replacing POU: " + str(e)}}
@@ -2817,10 +2832,10 @@ def compile_pou(application, pou_objs, pou_mapping):
                 precompile_msgs = [
                     {{
                         "Path": extract_line_number(obj.position_text) if obj.position_text else -1,
-                        "ErrorDesc": obj.text,
+                        "ErrorDesc": obj.text if obj.text else "pppppprecompile",
                         "IsDef": True if obj.position_text and "Decl" in obj.position_text else False,
                         "PouName": obj.object.get_name() if obj.object else "",
-                        "ID": obj.prefix + "{{:0>4d}}".format(int(obj.number))
+                        "ID": (obj.prefix + "{{:0>4d}}".format(int(obj.number))) if hasattr(obj, 'prefix') and hasattr(obj, 'number') and obj.prefix is not None and obj.number is not None else ""
                     }}
                     for obj in msg_objs if obj.severity in levels and \\
                         obj.object and obj.object.get_name() in obj_names
@@ -2857,31 +2872,91 @@ def compile_pou(application, pou_objs, pou_mapping):
                 compile_msgs = [
                     {{
                         "Path": extract_line_number(obj.position_text) if obj.position_text else -1,
-                        "ErrorDesc": obj.text,
+                        "ErrorDesc": obj.text if obj.text else "cccccccompile",
                         "IsDef": True if obj.position_text and "Decl" in obj.position_text else False,
                         "PouName": obj.object.get_name() if obj.object else "",
-                        "ID": obj.prefix + "{{:0>4d}}".format(int(obj.number))
+                        "ID": (obj.prefix + "{{:0>4d}}".format(int(obj.number))) if hasattr(obj, 'prefix') and hasattr(obj, 'number') and obj.prefix is not None and obj.number is not None else ""
                     }}
                     for obj in msg_objs if obj.severity in levels and \\
                         obj.object and obj.object.get_name() in obj_names
                 ]
                 print(compile_msgs)
 
-        result = {{
-            "success": True,
-            "message": "Build operation completed",
-            "pous": [{{
-                "name": pou.get_name(),
-                "type": pou_mapping[pou.get_name()]
-            }} for pou in pou_objs],
-            "time": compilation_time,
-            "Errors": compile_msgs,
-            "PrecompileErrors": precompile_msgs
-        }}
-    except Exception, precompile_error:
-        print("Error during precompile operation: " + str(precompile_error))
+    except Exception, build_error:
+        print("Error during build operation: " + str(build_error))
         print(traceback.format_exc())
-        result = {{"success": False, "error": "Error during precompile operation: " + str(precompile_error)}}
+        compile_msgs = []
+
+    # Scripts messages step - get scripts messages after build
+    try:
+        print("Getting scripts messages...")
+        scripts_msgs = []
+
+        cates_scripts = system.get_message_categories(bActive=False)
+
+        for cate in cates_scripts:
+            if cate is None:
+                continue
+            desc = system.get_message_category_description(cate)
+            scripts_desc_diff_lang = set(["Script Messages", "脚本信息"])  # scripts related messages
+            levels = set([scriptengine.Severity.FatalError, scriptengine.Severity.Error])
+            obj_names = set([obj.get_name() for obj in pou_objs])
+            if desc in scripts_desc_diff_lang:
+                #print("Found scripts message category, msgs:")
+                msg_objs = system.get_message_objects(category=cate)
+                #for obj in msg_objs:                                                                                      #delete this line to print the scripts messages 不然输出内容太多了 
+                #    print("Scripts Obj pos: {{}}, desc: {{}}, ser: {{}}".format(obj.position_text, obj.text, obj.severity))
+                scripts_msgs = []
+                if msg_objs is not None:
+                    for obj in msg_objs:
+                        path = extract_line_number(obj.position_text) if obj.position_text else -1
+                        error_desc = obj.text
+                        is_def = True if obj.position_text and "Decl" in obj.position_text else False
+                        pou_name = obj.object.get_name() if obj.object else ""
+                        msg_id = (obj.prefix + "{{:0>4d}}".format(int(obj.number))) if hasattr(obj, 'prefix') and hasattr(obj, 'number') and obj.number is not None else ""
+                        # Format as single line string
+                        scripts_msgs.append("Path=" + str(path) + ", ErrorDesc=" + str(error_desc) + ", IsDef=" + str(is_def) + ", PouName=" + str(pou_name) + ", ID=" + str(msg_id))
+                    #for msg in scripts_msgs:
+                    #    print(msg)
+                else:
+                    print("Warning: msg_objs is None for category: " + str(cate))
+
+        print("Scripts messages retrieval completed")
+
+    except Exception, scripts_error:
+        print("Error during scripts messages retrieval: " + str(scripts_error))
+        print(traceback.format_exc())
+        scripts_msgs = []
+
+    #注释掉 script messages内容太多了
+
+    result = {{
+       "success": True,
+       "message": "Build operation completed",
+       "pous": [{{
+           "name": pou.get_name(),
+           "type": pou_mapping[pou.get_name()]
+       }} for pou in pou_objs],
+       "time": compilation_time,
+       "Errors": compile_msgs,
+       "PrecompileErrors": precompile_msgs,
+       "Script Messages": scripts_msgs
+    }}
+
+    # result = {{
+    #     "success": True,
+    #     "message": "Build operation completed",
+    #     "pous": [{{
+    #         "name": pou.get_name(),
+    #         "type": pou_mapping[pou.get_name()]
+    #     }} for pou in pou_objs],
+    #     "time": compilation_time,
+    #     "Errors": compile_msgs,
+    #     "PrecompileErrors": precompile_msgs
+    # }}
+
+
+
 
     return result
 
@@ -2909,8 +2984,60 @@ try:
 except Exception, err:
     print("Error during workflow: " + str(err))
     print(traceback.format_exc())
+    
+    # Try to get scripts_msgs even when exception occurs
+    scripts_msgs = []
+    # Check if result already has Script Messages (from compile_pou)
+    if result and "Script Messages" in result:
+        scripts_msgs = result["Script Messages"]
+        print("Using scripts_msgs from existing result")
+    else:
+        # Need to retrieve scripts_msgs manually
+        try:
+            print("Getting scripts messages after exception...")
+            
+            # Define extract_line_number function for exception handler
+            def extract_line_number(text):
+                match = re.search(r'(?:Line|行)[\\s:]*(\\d+)', text)
+                if match:
+                    return int(match.group(1))
+                else:
+                    return -1
+            
+            cates_scripts = system.get_message_categories(bActive=False)
+            for cate in cates_scripts:
+                if cate is None:
+                    continue
+                desc = system.get_message_category_description(cate)
+                scripts_desc_diff_lang = set(["Script Messages", "脚本信息"])
+                if desc in scripts_desc_diff_lang:
+                    #print("Found scripts message category, msgs:")
+                    msg_objs = system.get_message_objects(category=cate)
+                    scripts_msgs = []
+                    if msg_objs is not None:
+                        for obj in msg_objs:
+                            path = extract_line_number(obj.position_text) if obj.position_text else -1
+                            error_desc = obj.text
+                            is_def = True if obj.position_text and "Decl" in obj.position_text else False
+                            pou_name = obj.object.get_name() if obj.object else ""
+                            msg_id = (obj.prefix + "{{:0>4d}}".format(int(obj.number))) if hasattr(obj, 'prefix') and hasattr(obj, 'number') and obj.number is not None else ""
+                            # Format as single line string
+                            scripts_msgs.append("Path=" + str(path) + ", ErrorDesc=" + str(error_desc) + ", IsDef=" + str(is_def) + ", PouName=" + str(pou_name) + ", ID=" + str(msg_id))
+                        #for msg in scripts_msgs:
+                        #    print(msg)
+                    else:
+                        print("Warning: msg_objs is None for category: " + str(cate))
+        except Exception, scripts_error:
+            print("Error during scripts messages retrieval in exception handler: " + str(scripts_error))
+            print(traceback.format_exc())
+            scripts_msgs = []
+    
     if not result:
-        result = {{"success": False, "error": "Error during workflow: " + str(err)}}
+        result = {{"success": False, "error": "Error during workflow: " + str(err), "Script Messages": scripts_msgs}}
+    else:
+        # If result exists but doesn't have Script Messages, add it
+        if "Script Messages" not in result:
+            result["Script Messages"] = scripts_msgs
 
 """.format(path, pou_infos_str)
 
