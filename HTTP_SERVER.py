@@ -2950,28 +2950,28 @@ def compile_pou(application, pou_objs, pou_mapping):
             levels = set([scriptengine.Severity.FatalError, scriptengine.Severity.Error])
             obj_names = set([obj.get_name() for obj in pou_objs])
             # print("obj_names: " + str(obj_names))
-            if desc in precompile_desc_diff_lang:
-                print("Found precompile message category, msgs:")
-                try:
-                    msg_objs = system.get_message_objects(cate)
-                except Exception as e:
-                    print("Failed to get messages for category: " + str(desc) + ", error: " + str(e))
-                    continue
-                
-                print("111qqa")
-                for obj in msg_objs:
-                    print("Precompile Obj pos: {{}}, desc: {{}}, ser: {{}}".format(obj.position_text, obj.text, obj.severity))
-                precompile_msgs = [
-                    {{
-                        "Path": extract_line_number(obj.position_text) if obj.position_text else -1,
-                        "ErrorDesc": obj.text if obj.text else "pppppprecompile",
-                        "IsDef": True if obj.position_text and "Decl" in obj.position_text else False,
-                        "PouName": obj.object.get_name() if obj.object else "",
-                        "ID": (obj.prefix + "{{:0>4d}}".format(int(obj.number))) if hasattr(obj, 'prefix') and hasattr(obj, 'number') and obj.prefix is not None and obj.number is not None else ""
-                    }}
-                    for obj in msg_objs if obj.severity in levels and obj.object and obj.object.get_name() in obj_names
-                ]
-                print(precompile_msgs)
+            # if desc in precompile_desc_diff_lang:
+            print("Found precompile message category, msgs:")
+            try:
+                msg_objs = system.get_message_objects(cate)
+            except Exception as e:
+                print("Failed to get messages for category: " + str(desc) + ", error: " + str(e))
+                continue
+            
+            print("111qqa")
+            for obj in msg_objs:
+                print("Precompile Obj pos: {{}}, desc: {{}}, ser: {{}}".format(obj.position_text, obj.text, obj.severity))
+            precompile_msgs = [
+                {{
+                    "Path": extract_line_number(obj.position_text) if obj.position_text else -1,
+                    "ErrorDesc": obj.text if obj.text else "pppppprecompile",
+                    "IsDef": True if obj.position_text and "Decl" in obj.position_text else False,
+                    "PouName": obj.object.get_name() if obj.object else "",
+                    "ID": (obj.prefix + "{{:0>4d}}".format(int(obj.number))) if hasattr(obj, 'prefix') and hasattr(obj, 'number') and obj.prefix is not None and obj.number is not None else ""
+                }}
+                for obj in msg_objs if obj.severity in levels and obj.object and obj.object.get_name() in obj_names
+            ]
+            print(precompile_msgs)
 
         precompile_time = time.time() - precompile_start_time
         print("Precompile operation completed")
@@ -3060,30 +3060,30 @@ def compile_pou(application, pou_objs, pou_mapping):
 
     #注释掉 script messages内容太多了
 
-    # result = {{
-    #    "success": True,
-    #    "message": "Build operation completed",
-    #    "pous": [{{
-    #        "name": pou.get_name(),
-    #        "type": pou_mapping[pou.get_name()]
-    #    }} for pou in pou_objs],
-    #    "time": compilation_time,
-    #    "Errors": compile_msgs,
-    #    "PrecompileErrors": precompile_msgs,
-    #    "Script Messages": scripts_msgs
-    # }}
-
     result = {{
-        "success": True,
-        "message": "Build operation completed",
-        "pous": [{{
-            "name": pou.get_name(),
-            "type": pou_mapping[pou.get_name()]
-        }} for pou in pou_objs],
-        "time": compilation_time,
-        "Errors": compile_msgs,
-        "PrecompileErrors": precompile_msgs
+       "success": True,
+       "message": "Build operation completed",
+       "pous": [{{
+           "name": pou.get_name(),
+           "type": pou_mapping[pou.get_name()]
+       }} for pou in pou_objs],
+       "time": compilation_time,
+       "Errors": compile_msgs,
+       "PrecompileErrors": precompile_msgs,
+       "Script Messages": scripts_msgs
     }}
+
+    # result = {{
+    #     "success": True,
+    #     "message": "Build operation completed",
+    #     "pous": [{{
+    #         "name": pou.get_name(),
+    #         "type": pou_mapping[pou.get_name()]
+    #     }} for pou in pou_objs],
+    #     "time": compilation_time,
+    #     "Errors": compile_msgs,
+    #     "PrecompileErrors": precompile_msgs
+    # }}
 
 
 
