@@ -2080,12 +2080,17 @@ def create_new_pou(project, pou_info):
         # Call with keyword arguments as shown in the example
         if pou_type == "FUNCTION":
             # For functions, return_type is required
+            if not ret_type or ret_type.strip() == "":
+                print("Error: return_type is required for FUNCTION but is empty")
+                result = {{"success": False, "error": "return_type is required for FUNCTION type POU. Please specify a valid return type (e.g., BOOL, INT, REAL) in the function declaration."}}
+                return None, result
+            
             pou = container.create_pou(
                 name=name,
                 type=pou_type_value,
                 return_type=ret_type
             )
-            print("Created function with return type")
+            print("Created function with return type: " + ret_type)
         else:
             # For programs and function blocks, return_type should not be specified
             pou = container.create_pou(
@@ -2406,12 +2411,17 @@ def create_new_pou(project, pou_info):
         # Call with keyword arguments as shown in the example
         if pou_type == "FUNCTION":
             # For functions, return_type is required
+            if not ret_type or ret_type.strip() == "":
+                print("Error: return_type is required for FUNCTION but is empty")
+                result = {{"success": False, "error": "return_type is required for FUNCTION type POU. Please specify a valid return type (e.g., BOOL, INT, REAL) in the function declaration."}}
+                return None, result
+            
             pou = container.create_pou(
                 name=name,
                 type=pou_type_value,
                 return_type=ret_type
             )
-            print("Created function with return type")
+            print("Created function with return type: " + ret_type)
         else:
             # For programs and function blocks, return_type should not be specified
             pou = container.create_pou(
@@ -2495,7 +2505,7 @@ def compile_pou(application, pou_objs, pou_mapping):
                         "ErrorDesc": obj.text,
                         "IsDef": True if obj.position_text and "Decl" in obj.position_text else False,
                         "PouName": obj.object.get_name() if obj.object else "",
-                        "ID": obj.prefix + "{{:0>4d}}".format(int(obj.number))
+                        "ID": (obj.prefix + "{{:0>4d}}".format(int(str(obj.number)))) if hasattr(obj, 'prefix') and hasattr(obj, 'number') and obj.prefix is not None and obj.number is not None else ""
                     }}
                     for obj in msg_objs if obj.severity in levels and \\
                         obj.object and obj.object.get_name() in obj_names
@@ -2933,52 +2943,52 @@ def compile_pou(application, pou_objs, pou_mapping):
             return -1
 
     # Precompile step - get precompile messages before build
-    try:
-        print("Starting precompile...")
-        # Note: In CODESYS, precompile is usually part of build process
-        # We'll capture messages before build to simulate precompile info
-        precompile_start_time = time.time()
+    # try:
+    #     print("Starting precompile...")
+    #     # Note: In CODESYS, precompile is usually part of build process
+    #     # We'll capture messages before build to simulate precompile info
+    #     precompile_start_time = time.time()
 
-        cates_pre = system.get_message_categories(bActive=False)
+    #     cates_pre = system.get_message_categories(bActive=False)
 
-        for cate in cates_pre:
-            if cate is None:
-                continue
-            desc = system.get_message_category_description(cate)
-            # print("desc: " + str(desc))
-            precompile_desc_diff_lang = set(["Precompile", "Compile Information"])  # precompile related messages
-            levels = set([scriptengine.Severity.FatalError, scriptengine.Severity.Error])
-            obj_names = set([obj.get_name() for obj in pou_objs])
-            # print("obj_names: " + str(obj_names))
-            # if desc in precompile_desc_diff_lang:
-            print("Found precompile message category, msgs:")
-            try:
-                msg_objs = system.get_message_objects(cate)
-            except Exception as e:
-                print("Failed to get messages for category: " + str(desc) + ", error: " + str(e))
-                continue
+    #     for cate in cates_pre:
+    #         if cate is None:
+    #             continue
+    #         desc = system.get_message_category_description(cate)
+    #         # print("desc: " + str(desc))
+    #         precompile_desc_diff_lang = set(["Precompile", "Compile Information"])  # precompile related messages
+    #         levels = set([scriptengine.Severity.FatalError, scriptengine.Severity.Error])
+    #         obj_names = set([obj.get_name() for obj in pou_objs])
+    #         # print("obj_names: " + str(obj_names))
+    #         # if desc in precompile_desc_diff_lang:
+    #         print("Found precompile message category, msgs:")
+    #         try:
+    #             msg_objs = system.get_message_objects(cate)
+    #         except Exception as e:
+    #             print("Failed to get messages for category: " + str(desc) + ", error: " + str(e))
+    #             continue
             
-            print("111qqa")
-            for obj in msg_objs:
-                print("Precompile Obj pos: {{}}, desc: {{}}, ser: {{}}".format(obj.position_text, obj.text, obj.severity))
-            precompile_msgs = [
-                {{
-                    "Path": extract_line_number(obj.position_text) if obj.position_text else -1,
-                    "ErrorDesc": obj.text if obj.text else "pppppprecompile",
-                    "IsDef": True if obj.position_text and "Decl" in obj.position_text else False,
-                    "PouName": obj.object.get_name() if obj.object else "",
-                    "ID": (obj.prefix + "{{:0>4d}}".format(int(obj.number))) if hasattr(obj, 'prefix') and hasattr(obj, 'number') and obj.prefix is not None and obj.number is not None else ""
-                }}
-                for obj in msg_objs if obj.severity in levels and obj.object and obj.object.get_name() in obj_names
-            ]
-            print(precompile_msgs)
+    #         print("111qqa")
+    #         for obj in msg_objs:
+    #             print("Precompile Obj pos: {{}}, desc: {{}}, ser: {{}}".format(obj.position_text, obj.text, obj.severity))
+    #         precompile_msgs = [
+    #             {{
+    #                 "Path": extract_line_number(obj.position_text) if obj.position_text else -1,
+    #                 "ErrorDesc": obj.text if obj.text else "pppppprecompile",
+    #                 "IsDef": True if obj.position_text and "Decl" in obj.position_text else False,
+    #                 "PouName": obj.object.get_name() if obj.object else "",
+    #                 "ID": ((obj.prefix + "{{:0>4d}}".format(int(str(obj.number)))) if hasattr(obj, 'prefix') and hasattr(obj, 'number') and obj.prefix is not None and obj.number is not None else "") if hasattr(obj, 'prefix') and hasattr(obj, 'number') and obj.prefix is not None and obj.number is not None else ""
+    #             }}
+    #             for obj in msg_objs if obj.severity in levels and obj.object and obj.object.get_name() in obj_names
+    #         ]
+    #         print(precompile_msgs)
 
-        precompile_time = time.time() - precompile_start_time
-        print("Precompile operation completed")
+    #     precompile_time = time.time() - precompile_start_time
+    #     print("Precompile operation completed")
 
-    except Exception, precompile_error:
-        print("Error during precompile operation: " + str(precompile_error))
-        print(traceback.format_exc())
+    # except Exception, precompile_error:
+    #     print("Error during precompile operation: " + str(precompile_error))
+    #     print(traceback.format_exc())
 
     try:
         print("Compiling application...")
@@ -2992,7 +3002,7 @@ def compile_pou(application, pou_objs, pou_mapping):
             if cate is None:
                 continue
             desc = system.get_message_category_description(cate)
-            build_desc_diff_lang = set(["Build", "编译", "编译信息"])  # supplyment by yourself if need language change
+            build_desc_diff_lang = set(["Build", "编译"])  # supplyment by yourself if need language change
             levels = set([scriptengine.Severity.FatalError, scriptengine.Severity.Error]) # we only consider fatal errors and normal errors
             obj_names = set([obj.get_name() for obj in pou_objs])
             if desc in build_desc_diff_lang:
@@ -3017,7 +3027,7 @@ def compile_pou(application, pou_objs, pou_mapping):
         print(traceback.format_exc())
         compile_msgs = []
 
-    # Scripts messages step - get scripts messages after build
+    #Scripts messages step - get scripts messages after build
     try:
         print("Getting scripts messages...")
         scripts_msgs = []
@@ -3072,18 +3082,6 @@ def compile_pou(application, pou_objs, pou_mapping):
        "PrecompileErrors": precompile_msgs,
        "Script Messages": scripts_msgs
     }}
-
-    # result = {{
-    #     "success": True,
-    #     "message": "Build operation completed",
-    #     "pous": [{{
-    #         "name": pou.get_name(),
-    #         "type": pou_mapping[pou.get_name()]
-    #     }} for pou in pou_objs],
-    #     "time": compilation_time,
-    #     "Errors": compile_msgs,
-    #     "PrecompileErrors": precompile_msgs
-    # }}
 
 
 
