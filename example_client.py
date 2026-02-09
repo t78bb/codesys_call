@@ -206,7 +206,7 @@ def copy_project(project_dir):
     if isinstance(project_dir, str):
         project_dir = Path(project_dir)
     
-    source_dir = Path(r"D:\graduate_project\项目级st补全\人工评测编译")
+    source_dir = Path(r"F:\项目级st补全\人工评测编译")
     if source_dir.exists():
         logger.info(f"Copying all projects from: {source_dir}")
         

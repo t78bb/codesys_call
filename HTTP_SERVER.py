@@ -61,7 +61,7 @@ def get_local_ipv4():
 # Constants
 SERVER_HOST = get_local_ipv4()
 SERVER_PORT = 9000
-CODESYS_PATH = r"D:\codesys\CODESYS\Common\CODESYS.exe"  # Path provided by user
+CODESYS_PATH = r"F:\codesys\CODESYS\Common\CODESYS.exe"  # Path provided by user
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PERSISTENT_SCRIPT = os.path.join(SCRIPT_DIR, "PERSISTENT_SESSION.py")
 API_KEY_FILE = os.path.join(SCRIPT_DIR, "api_keys.json")
@@ -2083,10 +2083,10 @@ def create_new_pou(project, pou_info):
         # Call with keyword arguments as shown in the example
         if pou_type == "FUNCTION":
             # For functions, return_type is required
-            if not ret_type or ret_type.strip() == "":
-                print("Error: return_type is required for FUNCTION but is empty")
-                result = {{"success": False, "error": "return_type is required for FUNCTION type POU. Please specify a valid return type (e.g., BOOL, INT, REAL) in the function declaration."}}
-                return None, result
+            #if not ret_type or ret_type.strip() == "":
+            #    print("Error: return_type is required for FUNCTION but is empty")
+            #    result = {{"success": False, "error": "return_type is required for FUNCTION type POU. Please specify a valid return type (e.g., BOOL, INT, REAL) in the function declaration."}}
+            #    return None, result
             
             pou = container.create_pou(
                 name=name,
@@ -2169,7 +2169,10 @@ def compile_pou(application, pou_objs, pou_mapping):
             if cate is None:
                 continue
             desc = system.get_message_category_description(cate)
-            build_desc_diff_lang = set(["Build", "编译"])  # supplyment by yourself if need language change
+            desc_str = desc if desc is not None else 'empty'
+            print("desc: " + desc_str)
+            build_desc_diff_lang = set(["Build", "编译", "编译信息", "预编译"])  # supplyment by yourself if need language change
+            
             levels = set([scriptengine.Severity.FatalError, scriptengine.Severity.Error]) # we only consider fatal errors and normal errors
             obj_names = set([obj.get_name() for obj in pou_objs])
             if desc in build_desc_diff_lang:
@@ -2181,7 +2184,7 @@ def compile_pou(application, pou_objs, pou_mapping):
                     {{
                         "Path": extract_line_number(obj.position_text) if obj.position_text else -1,
                         "ErrorDesc": obj.text,
-                        "IsDef": True if obj.position_text and "Decl" in obj.position_text else False,
+                        "IsDef": True if "Decl" in obj.position_text else False,
                         "PouName": obj.object.get_name() if obj.object else "",
                         "ID": obj.prefix + "{{:0>4d}}".format(int(obj.number))
                     }}
@@ -2221,9 +2224,6 @@ try:
         program_obj.textual_declaration.text, [pou.get_name() for pou in pou_objs])
     program_obj.textual_declaration.replace(new_textual_declaration)
     
-
-
-
     result = compile_pou(application, pou_objs, pou_mapping)
    # result["new_textual_declaration"] = new_textual_declaration
     if not result["success"]:
@@ -2248,9 +2248,9 @@ finally:
 
 
 
-    def project_generate_pou_create_set_compile_script(self, params):
+    def project_generate_pou_create_set_compile_script(self, path, params):
         """Wrapper function that calls the extracted script generator."""
-        return project_generate_pou_create_set_compile_script(params)
+        return project_generate_pou_create_set_compile_script(path, params)
 
 
 
@@ -3568,7 +3568,9 @@ class CodesysApiHandler(BaseHTTPRequestHandler):
             "message": "Unknown error"
         }
         print("block: ", blocks)
-        script = self.script_generator.project_generate_pou_create_set_compile_script(blocks)
+        path = params.get("path", "")
+        path = path.replace("\\", "\\\\")
+        script = self.script_generator.project_generate_pou_create_set_compile_script(path, blocks)
         result = self.script_executor.execute_script(script)
         if result.get("success", False):
             logger.info("POU code compiling workflow successful")
