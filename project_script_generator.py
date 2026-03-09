@@ -43,6 +43,57 @@ import json
 import sys
 import os
 
+def setup_prompt_answers_for_storage_upgrade():
+    #Try to auto-answer storage format upgrade prompt with No.
+    try:
+        sys_obj = None
+        try:
+            sys_obj = scriptengine.system
+        except Exception:
+            try:
+                sys_obj = system
+            except Exception:
+                sys_obj = None
+
+        if sys_obj is None:
+            print("system object unavailable, skip prompt setup")
+            return
+
+        # Keep normal prompt behavior and log message keys for diagnosis.
+        if hasattr(scriptengine, 'PromptHandling'):
+            try:
+                sys_obj.prompt_handling = (
+                    scriptengine.PromptHandling.ForwardSimplePrompts |
+                    scriptengine.PromptHandling.LogMessageKeys
+                )
+            except Exception, e:
+                print("Failed setting prompt_handling: " + str(e))
+
+        if not hasattr(sys_obj, 'prompt_answers') or not hasattr(scriptengine, 'PromptResult'):
+            print("prompt_answers or PromptResult unavailable, skip prompt auto-answer")
+            return
+
+        no_result = scriptengine.PromptResult.No
+        # Exact key captured from runtime log.
+        sys_obj.prompt_answers["LossOfDataWarning2"] = no_result
+        # Candidate keys for storage format / upgrade prompts.
+        candidate_keys = [
+            "StorageFormatUpgrade",
+            "UpgradeStorageFormat",
+            "ProjectStorageFormatUpgrade",
+            "ProjectFormatUpgrade",
+            "AskUpgradeProjectStorageFormat",
+            "UpgradeProjectFormat",
+            "ProjectUpgrade"
+        ]
+        for key in candidate_keys:
+            sys_obj.prompt_answers[key] = no_result
+        print("Configured prompt_answers=No for storage upgrade candidates")
+    except Exception, e:
+        print("setup_prompt_answers_for_storage_upgrade failed: " + str(e))
+
+setup_prompt_answers_for_storage_upgrade()
+
 
 try:
     print("Starting project close script")
@@ -236,7 +287,7 @@ def get_program(application):
 def get_and_replace_pou(project, pou_info):
     try:
         pou_name = pou_info.get('pou_name')
-
+        print("pout_name: " + pou_name)
         application = project.active_application
         if application is None:
             print("get Application failed")
@@ -251,6 +302,8 @@ def get_and_replace_pou(project, pou_info):
             # Ensure code strings are not None to avoid "Value cannot be null" error
             code_decl = pou_info.get('code_decl') or "jk"
             code_impl = pou_info.get('code_impl') or "jk"
+            # code_impl += "qwdqwe"
+
             pou.textual_declaration.replace(code_decl)
             pou.textual_implementation.replace(code_impl)
             res = {{
@@ -380,6 +433,7 @@ def compile_pou(application, pou_objs, pou_mapping):
     print("Starting compile process...")
 
     compile_msgs = []
+    max_compile_msgs = 2000
 
     def extract_line_number(text):
         match = re.search(r'(?:Line|行)[\\s:]*(\\d+)', text)
@@ -387,6 +441,79 @@ def compile_pou(application, pou_objs, pou_mapping):
             return int(match.group(1))
         else:
             return -1
+
+    def safe_get_message_object_name(msg_obj):
+        try:
+            if not hasattr(msg_obj, 'object') or msg_obj.object is None:
+                return ""
+            return msg_obj.object.get_name()
+        except Exception, e:
+            print("Failed to get message object name: " + str(e))
+            return ""
+
+    def safe_get_message_id(msg_obj):
+        try:
+            if hasattr(msg_obj, 'prefix') and hasattr(msg_obj, 'number') and msg_obj.prefix is not None and msg_obj.number is not None:
+                return msg_obj.prefix + "{{:0>4d}}".format(int(str(msg_obj.number)))
+            return ""
+        except Exception, e:
+            print("Failed to build message id: " + str(e))
+            return ""
+
+    def safe_get_message_full_info(msg_obj):
+        info = {{}}
+        try:
+            info["__type__"] = str(type(msg_obj))
+        except Exception:
+            info["__type__"] = ""
+        try:
+            info["__repr__"] = str(msg_obj)
+        except Exception:
+            info["__repr__"] = ""
+
+        try:
+            attr_names = dir(msg_obj)
+        except Exception, e:
+            info["__dir_error__"] = str(e)
+            return info
+
+        for attr in attr_names:
+            if attr.startswith("__") and attr.endswith("__"):
+                continue
+            try:
+                value = getattr(msg_obj, attr)
+                if callable(value):
+                    info[attr] = "<callable>"
+                else:
+                    try:
+                        info[attr] = str(value)
+                    except Exception:
+                        info[attr] = "<unprintable>"
+            except Exception, e:
+                info[attr] = "<access_error: " + str(e) + ">"
+
+        # Provide explicit nested object snapshot if present.
+        try:
+            if hasattr(msg_obj, 'object') and msg_obj.object is not None:
+                nested = msg_obj.object
+                nested_info = {{}}
+                try:
+                    nested_info["__type__"] = str(type(nested))
+                except Exception:
+                    nested_info["__type__"] = ""
+                try:
+                    nested_info["__repr__"] = str(nested)
+                except Exception:
+                    nested_info["__repr__"] = ""
+                try:
+                    nested_info["name"] = nested.get_name()
+                except Exception, e:
+                    nested_info["name"] = "<access_error: " + str(e) + ">"
+                info["object_snapshot"] = nested_info
+        except Exception, e:
+            info["object_snapshot"] = "<access_error: " + str(e) + ">"
+
+        return info
 
     try:
         print("Compiling application...")
@@ -401,33 +528,124 @@ def compile_pou(application, pou_objs, pou_mapping):
                 continue
             desc = system.get_message_category_description(cate)
             build_desc_diff_lang = set(["Build", "编译"])  # supplyment by yourself if need language change
+            precompile_desc_diff_lang = set(["Precompile", "Compile Information", "编译信息", "预编译"])  # precompile category
             levels = set([scriptengine.Severity.FatalError, scriptengine.Severity.Error]) # we only consider fatal errors and normal errors
-            obj_names = set([obj.get_name() for obj in pou_objs])
+            obj_names = set()
+            for pou in pou_objs:
+                try:
+                    obj_names.add(pou.get_name())
+                except Exception, e:
+                    print("Skip invalid pou object while collecting names: " + str(e))
+
+            # if desc in precompile_desc_diff_lang:
+            #     print("Found precompile message category, msgs:")
+            #     try:
+            #         msg_objs = system.get_message_objects(category=cate)
+            #     except Exception, e:
+            #         print("Skip precompile category due to get_message_objects error: " + str(e))
+            #         continue
+            #     for obj in msg_objs:
+            #         try:
+            #             print("Obj pos: {{}}, desc: {{}}, ser: {{}}".format(obj.position_text, obj.text, obj.severity))
+            #         except Exception, e:
+            #             print("Failed to print precompile message object: " + str(e))
+
+            #     for obj in msg_objs:
+            #         try:
+            #             if obj.severity not in levels:
+            #                 continue
+
+            #             pou_name = safe_get_message_object_name(obj)
+            #             if pou_name and pou_name not in obj_names:
+            #                 continue
+
+            #             compile_msgs.append({{
+            #                 "Path": extract_line_number(obj.position_text) if obj.position_text else -1,
+            #                 "ErrorDesc": obj.text if hasattr(obj, 'text') else "",
+            #                 "IsDef": True if obj.position_text and "Decl" in obj.position_text else False,
+            #                 "PouName": pou_name,
+            #                 "ID": safe_get_message_id(obj),
+            #                 "ObjFull": safe_get_message_full_info(obj)
+            #             }})
+
+            #             if len(compile_msgs) >= max_compile_msgs:
+            #                 compile_msgs.append({{
+            #                     "Path": -1,
+            #                     "ErrorDesc": "Compile message list truncated at limit: " + str(max_compile_msgs),
+            #                     "IsDef": False,
+            #                     "PouName": "",
+            #                     "ID": ""
+            #                 }})
+            #                 break
+            #         except Exception, e:
+            #             print("Skip invalid precompile message object during collection: " + str(e))
+
+            #     if len(compile_msgs) >= max_compile_msgs:
+            #         break
+
             if desc in build_desc_diff_lang:
                 print("Found compile message category, msgs:")
-                msg_objs = system.get_message_objects(category=cate)
+                try:
+                    msg_objs = system.get_message_objects(category=cate)
+                except Exception, e:
+                    print("Skip build category due to get_message_objects error: " + str(e))
+                    continue
                 for obj in msg_objs:
-                    print("Obj pos: {{}}, desc: {{}}, ser: {{}}".format(obj.position_text, obj.text, obj.severity))
-                compile_msgs = [
-                    {{
-                        "Path": extract_line_number(obj.position_text) if obj.position_text else -1,
-                        "ErrorDesc": obj.text,
-                        "IsDef": True if obj.position_text and "Decl" in obj.position_text else False,
-                        "PouName": obj.object.get_name() if obj.object else "",
-                        "ID": obj.prefix + "{{:0>4d}}".format(int(obj.number))
-                    }}
-                    for obj in msg_objs if obj.severity in levels and \\
-                        obj.object and obj.object.get_name() in obj_names
-                ]
+                    try:
+                        print("Obj pos: {{}}, desc: {{}}, ser: {{}}".format(obj.position_text, obj.text, obj.severity))
+                    except Exception, e:
+                        print("Failed to print compile message object: " + str(e))
+
+                for obj in msg_objs:
+                    try:
+                        if obj.severity not in levels:
+                            continue
+
+                        pou_name = safe_get_message_object_name(obj)
+                        # If message is bound to a specific object, keep project scope filtering.
+                        if pou_name is None or (pou_name and pou_name not in obj_names):
+                            continue
+
+                        compile_msgs.append({{
+                            "Path": extract_line_number(obj.position_text) if obj.position_text else -1,
+                            "ErrorDesc": obj.text if hasattr(obj, 'text') else "",
+                            "IsDef": True if obj.position_text and "Decl" in obj.position_text else False,
+                            "PouName": pou_name,
+                            "ID": safe_get_message_id(obj),
+                            "ObjFull": safe_get_message_full_info(obj)
+                        }})
+
+                        if len(compile_msgs) >= max_compile_msgs:
+                            compile_msgs.append({{
+                                "Path": -1,
+                                "ErrorDesc": "Compile message list truncated at limit: " + str(max_compile_msgs),
+                                "IsDef": False,
+                                "PouName": "",
+                                "ID": ""
+                            }})
+                            break
+                    except Exception, e:
+                        print("Skip invalid compile message object during collection: " + str(e))
+
+                if len(compile_msgs) >= max_compile_msgs:
+                    break
                 print(compile_msgs)
+
+        safe_pous = []
+        for pou in pou_objs:
+            try:
+                pou_name = pou.get_name()
+                safe_pous.append({{
+                    "name": pou_name,
+                    "type": pou_mapping.get(pou_name, "UNKNOWN")
+                }})
+            except Exception, e:
+                print("Skip invalid pou object while building result: " + str(e))
 
         result = {{
             "success": True,
             "message": "Build operation completed",
-            "pous": [{{
-                "name": pou.get_name(),
-                "type": pou_mapping[pou.get_name()]
-            }} for pou in pou_objs],
+            "pous": safe_pous,
             "time": compilation_time,
             "Errors": compile_msgs
         }}

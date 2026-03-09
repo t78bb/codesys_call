@@ -1,0 +1,28 @@
+  "Errors": [
+    {
+      "ErrorDesc": "Unknown type: 'LinearMemoryManager'",
+      "PouName": "",
+      "ObjFull": {
+        "prefix": "C",
+        "icon": "None",
+        "has_details_handler": "False",
+        "__repr__": "Unknown type: 'LinearMemoryManager'",
+        "call_details_handler": "<callable>",
+        "number": "77",
+        "__type__": "<type 'ScriptMessage'>",
+        "length": "8",
+        "position_offset": "89",
+        "severity": "Error",
+        "text": "Unknown type: 'LinearMemoryManager'",
+        "FontColor": "Color [Empty]",
+        "position_text": "None",
+        "position": "0",
+        "project": "Project(Project=146, stPath=F:\\codesys_call\\CODESYSCompileService-main\\projects\\Builder_Application_RPI.project)",
+        "object": "<access_error: The object GUID '90b26d49-28a9-4468-b69a-5d38ff55c2d2' is not valid.>",
+        "ToString": "<callable>"
+      },
+      "Path": -1,
+      "IsDef": false,
+      "ID": "C0077"
+    }
+  ],

@@ -674,7 +674,7 @@ class ScriptOnlineApplication(object):
 
         Some operations like start() have to wait for defined application states. If those
         operations take longer than this timeout, a :exc:`TimeoutException` is thrown.
-        The default timeout is 60 seconds.
+        The default timeout is 100 seconds.
 
         :rtype: int
 

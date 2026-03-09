@@ -339,12 +339,12 @@ class ScriptExecutor:
         self.request_dir = request_dir
         self.result_dir = result_dir
         
-    def execute_script(self, script_content, timeout=60):
+    def execute_script(self, script_content, timeout=100):
         """Execute a script and return the result.
         
         Args:
             script_content (str): The script content to execute
-            timeout (int): Timeout in seconds (default: 60 seconds)
+            timeout (int): Timeout in seconds (default: 100 seconds)
             
         Returns:
             dict: The result of the script execution
@@ -1890,17 +1890,18 @@ except Exception as e:
         
         return script
     
-    def extract_pou_blocks(self, code: str):
+    def extract_pou_blocks(self, real_block_name: str, code: str):
         end_pattern = {
             "FUNCTION_BLOCK": re.compile(r'END_FUNCTION_BLOCK', re.IGNORECASE),
             "FUNCTION": re.compile(r'END_FUNCTION', re.IGNORECASE),
-            "PROGRAM": re.compile(r'END_PROGRAM', re.IGNORECASE)
+            "PROGRAM": re.compile(r'END_PROGRAM', re.IGNORECASE),
+            "METHOD": re.compile(r'END_FUNCTION_BLOCK', re.IGNORECASE)
         }
         logger.info("original code: %s", code)
         blocks = []
         pos = 0
         while pos < len(code):
-            match = re.search(r'^[ \t]*(FUNCTION_BLOCK|FUNCTION|PROGRAM)\s+(\w+)', code[pos:], re.IGNORECASE | re.MULTILINE)
+            match = re.search(r'^[ \t]*(FUNCTION_BLOCK|FUNCTION|PROGRAM|METHOD)\s+(\w+)', code[pos:], re.IGNORECASE | re.MULTILINE)
             if not match:
                 break
             block_type, block_name = match.groups()
@@ -1924,14 +1925,14 @@ except Exception as e:
 
             # Extract return type if FUNCTION
             return_type = ""
-            if block_type == "FUNCTION":
+            if block_type == "FUNCTION" or block_type == "METHOD":
                 header_snippet = full_block[:200]
                 ret_match = re.search(r'FUNCTION\s+\w+\s*:\s*(\w+)', header_snippet, re.IGNORECASE)
                 if ret_match:
                     return_type = ret_match.group(1)
 
             blocks.append({
-                "pou_name": block_name,
+                "pou_name": real_block_name,
                 "pou_type": block_type,
                 "pou_code": (declaration.strip(), implementation.strip()),
                 "return_type": return_type
@@ -3336,7 +3337,7 @@ class CodesysApiHandler(BaseHTTPRequestHandler):
         
         # Generate and execute project compilation script
         script = self.script_generator.generate_project_compile_script(params)
-        result = self.script_executor.execute_script(script, timeout=60)  # Compilation can take longer
+        result = self.script_executor.execute_script(script, timeout=100)  # Compilation can take longer
         
         if result.get("success", False):
             logger.info("Project compilation successful")
@@ -3530,7 +3531,7 @@ class CodesysApiHandler(BaseHTTPRequestHandler):
         # result = self.script_executor.execute_script(script)
         
         # required = ["pou_name", "pou_type", "pou_code", "return_type"]
-        blocks = self.script_generator.extract_pou_blocks(params["Code"])
+        blocks = self.script_generator.extract_pou_blocks(params["BlockName"], params["Code"])
         result = {
             "success": False,
             "message": "Unknown error"
@@ -3562,11 +3563,12 @@ class CodesysApiHandler(BaseHTTPRequestHandler):
                 }, 400)
                 return
 
-        blocks = self.script_generator.extract_pou_blocks(params["Code"])
+        blocks = self.script_generator.extract_pou_blocks(params["BlockName"], params["Code"])
         result = {
             "success": False,
             "message": "Unknown error"
         }
+        
         print("block: ", blocks)
         path = params.get("path", "")
         path = path.replace("\\", "\\\\")
@@ -3597,7 +3599,7 @@ class CodesysApiHandler(BaseHTTPRequestHandler):
                 }, 400)
                 return
         
-        blocks = self.script_generator.extract_pou_blocks(params["Code"])
+        blocks = self.script_generator.extract_pou_blocks(params["BlockName"], params["Code"])
         result = {
             "success": False,
             "message": "Unknown error"

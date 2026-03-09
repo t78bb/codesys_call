@@ -69,7 +69,7 @@ session.headers.update({
     'Content-Type': 'application/json'
 })
 
-def call_api(method, endpoint, data=None, params=None, timeout=60):
+def call_api(method, endpoint, data=None, params=None, timeout=100):
     """Make an API call to the CODESYS REST API."""
     url = "{0}/{1}".format(API_BASE_URL, endpoint)
     logger.debug(f"API Request: {method} {url}")
